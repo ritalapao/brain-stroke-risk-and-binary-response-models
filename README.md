@@ -4,7 +4,7 @@ This project presents an empirical analysis of **stroke risk using binary respon
 
 ## Objective
 
-The main goal of this project is to estimate and interpret the marginal effects of key risk factors—such as age, hypertension, and heart disease—on stroke occurrence, while comparing different econometric models for binary outcomes.
+The main goal of this project is to estimate and interpret the marginal effects of key risk factors—such as age, hypertension, and heart disease on stroke occurrence, while comparing different econometric models for binary outcomes.
 
 ## Data
 
