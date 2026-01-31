@@ -1,0 +1,354 @@
+---
+title: |
+  **BRAIN STROKE RISK AND BINARY RESPONSE MODELS** <br> Econometrics II | Empirical Poster
+author:
+- name: Gabriela Carreira (20231688)
+- name: Madalena Geraldes (20231670)
+- name: Maria Marques (20231708)
+- name: Rita Lapão (20231595)
+column_numbers: 3
+column_margins: '0.55in'
+columnline_width: '1.5mm'
+columnline_style: 'solid'
+title_textsize: '70pt'
+author_textsize: '42pt'
+body_textsize: '34px'
+logoleft_name: "C:/Projeto de econometria II/nova-ims-logo-vertical.png"
+
+
+editor_options: 
+  chunk_output_type: console
+primary_colour:   '#2B1B1E'   
+secondary_colour: '#F7E6EA'   
+accent_colour:    '#E65A8D'   
+title_textcol:       '#FFFFFF'
+author_textcol:      '#FFE3EC'
+body_textcol:        '#1F1F1F'
+sectitle_bgcol:      '#E65A8D'
+sectitle_textcol:    '#FFFFFF'
+sectitle2_textcol:   '#7A3A4A'
+affiliation_textcol: '#3A2A2E'
+font_family: 'Arial'
+titletext_fontfamily: 'Arial'
+titlebox_borderwidth: '0.35cm'
+
+output: 
+posterdown::posterdown_html:
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  out.width = "100%",
+  results = "asis",
+  tidy = FALSE
+)
+options(knitr.table.format = "html") 
+```
+
+# 1. Introduction
+
+A stroke is a medical emergency that occurs when blood flow to the brain is interrupted, either due to a blockage or bleeding. This lack of blood flow can lead to brain cell death and serious complications. Strokes can be fatal and need immediate treatment. We used the Brain Stroke Dataset and econometric models applied to a binary variable, aiming to study the marginal effect of hypertension and smoking on the probability of a stroke, controlling for age and other risk factors that impact strokes.
+```{r include = FALSE}
+# Setting up packages
+
+#install.packages("dplyr")
+#install.packages("broom")
+#install.packages("knitr")
+#install.packages("kableExtra")
+#install.packages("lmtest")
+#install.packages("sandwich")
+#install.packages("margins")
+#install.packages("pagedown")
+#install.packages("posterdown")
+
+library(dplyr)       # limpeza e manipulação de dados (filter, mutate, group_by, summarise)
+library(broom)       # transformar outputs de modelos (lm/glm) em tabelas "tidy"
+library(knitr)       # gerar tabelas no R Markdown (kable)
+library(kableExtra)  # dar estilo às tabelas (tamanho, cores, hover, etc.)
+library(lmtest)      # testes econométricos como o LR test (lrtest)
+library(sandwich)    # matrizes robustas (ex: vcovHC) para SE robustos no LPM
+library(margins)     # calcular Average Partial Effects (AME/APE) no Logit
+#library(posterdown)
+#library(pagedown)
+
+brain_strokes <- read.csv(here::here("C:/Projeto de econometria II/brain_stroke.csv"))
+#View(brain_strokes)
+
+any(is.na(brain_strokes))
+any(duplicated(brain_strokes))
+```
+
+This data set does not contain any missing values neither duplicates. Before addressing the technical aspects of the project itself, we focused on ensuring that we had a clean and reliable data set, so that we could draw the most accurate and high-quality inferences possible.
+
+```{r include = FALSE}
+#Number of observations
+nrow(brain_strokes)
+
+```
+
+# 2. Data & Variables
+
+Our data set consists of 11 original variables and 4981 total observations. After analysing the explanatory variables, we decided to keep them, as our objective is to draw conclusions about social and risk factors on strokes.
+
+```{r include = FALSE}
+# ever_married: Yes = 1, No = 0
+brain_strokes$ever_married_bin <- ifelse(brain_strokes$ever_married == "Yes", 1, 0)
+
+# Residence_type: Urban = 1, Rural = 0
+brain_strokes$residence_type_bin <- ifelse(brain_strokes$Residence_type == "Urban", 1, 0)
+
+# Gender: Male = 1, Female = 0
+brain_strokes$gender_bin <- ifelse(brain_strokes$gender == "Male", 1, 0)
+
+# (this is to verify if the attribution of binary was done correctly)
+table(brain_strokes$ever_married, brain_strokes$ever_married_bin)
+table(brain_strokes$Residence_type, brain_strokes$residence_type_bin)
+table(brain_strokes$gender_bin, brain_strokes$gender_bin)
+
+# Encoding work_type and smoking_status
+brain_strokes <- brain_strokes %>%
+  mutate(
+    work_type_enc = case_when(
+      work_type == "Children"       ~ 1,
+      work_type == "Govt_job"        ~ 2,
+      work_type == "Never worked"   ~ 3,
+      work_type == "Private"        ~ 4,
+      work_type == "Self-employed" ~ 5,
+      TRUE                          ~ NA_real_
+    ),
+    smoking_status_enc = case_when(
+      smoking_status == "never smoked"    ~ 0,
+      smoking_status == "formerly smoked" ~ 1,
+      smoking_status == "smokes"          ~ 2,
+      smoking_status == "Unknown"         ~ 3,
+      TRUE                                ~ NA_real_
+    )
+  )
+
+# (this is to verify if the encoding was done correctly)
+table(brain_strokes$work_type, brain_strokes$work_type_enc)
+table(brain_strokes$smoking_status, brain_strokes$smoking_status_enc)
+
+# Creating a table to explain the variables
+table <- data.frame(
+  Variables = c("stroke","gender", "age", "hypertension","heart_disease",
+               "ever_married", "work_type", "Residence_type", "avg_glucose_level", 
+               "bmi", "smoking_status"),
+  
+  Description = c(
+    "Individual has had a stroke (0- No, 1- Yes)",
+    "Gender (0 - Female, 1 - Male)",
+    "Age of the individual, in years",
+    "Individual has hypertension (0- doesn't have, 1- has)",
+    "Individual has heart disease (0- doesn't have, 1- has)",
+    "The individual has been married (0- doesn't have, 1- has)",
+    "Work type by category: Children, Never Worked, Private, Self-employed, Govt_job",
+    "Type of residence (0- Rural, 1- Urban)",
+    "Average glucose level in the blood",
+    "Index of body mass",
+    "Individual's smoking status (never smoked, formerly smoked, smokes, Unknown)"
+  )
+)
+
+```
+
+```{r include = TRUE}
+kable(table,
+      col.names = c("Variable", "Description"),
+      align = c("l","l"),
+      escape = FALSE) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped"),
+    font_size = 28
+  ) %>%
+  row_spec(
+    0,
+    bold = TRUE,
+    color = "white",
+    background = "#E65A8D"
+  ) %>%
+  column_spec(1, bold = TRUE, width = "20em") %>%
+  column_spec(2, width = "45em")
+```
+
+# 3. Visualization
+
+Before estimating our model, we decided to check the correlation between stroke and hypertension & stroke and age.
+
+```{r include = TRUE}
+# Correlation between stroke vs hypertension and its visualization
+cor_stroke_hyper <- cor(
+  brain_strokes$stroke,
+  brain_strokes$hypertension,
+  use = "complete.obs",
+  method = "pearson"
+)
+cor_stroke_hyper
+
+stroke_hyper_plot <- aggregate(
+  stroke ~ hypertension,
+  data = brain_strokes,
+  mean
+)
+
+stroke_hyper_plot$hypertension <- factor(
+  stroke_hyper_plot$hypertension,
+  labels = c("No hypertension", "Hypertension")
+)
+
+barplot(
+  stroke_hyper_plot$stroke,
+  names.arg = stroke_hyper_plot$hypertension,
+  ylab = "Stroke probability",
+  main = "Stroke prevalence by hypertension",
+  col = "#E65A8D"
+)
+
+# Plotting the relationship betweeen stroke occurence and age
+
+plot(
+  brain_strokes$age,
+  jitter(brain_strokes$stroke, amount = 0.05),
+  xlab = "Age (years)",
+  ylab = "Stroke (0 = No, 1 = Yes)",
+  main = "Stroke occurrence by age",
+  pch = 19,
+  col = rgb(230, 90, 141, 120, maxColorValue = 255)
+)
+
+
+```
+
+Through a visual analysis, we see clear and logical patterns. Stroke occurrences are more prevalent when considering older people, while younger people almost have no evidence of strokes, which makes sense. Additionally, stroke occurrence is considerably higher among individuals with hypertension compared to those without, which suggests a strong association between hypertension and stroke.
+
+# 4. Model Specification & Estimation
+
+After getting some insights on our data, in order to take inferences, we applied three techniques used in the context of binary varibles: Linear Probability Model (4.1), Logit Model (4.2) and Probit Model (4.3).
+
+## 4.1 Linear Probability Model
+
+From the beginning, we already knew we wouldn’t use the LPM model. Although this model is very easy to interpret, the observed limitations make it not the best option, since the probabilities of this model are: [-2.29, 1.01], which doesn’t make sense since the desired range for a probability problem is [0,1].
+
+```{r include = FALSE}
+reg1 = lm(stroke ~ gender + age + hypertension + heart_disease + ever_married + work_type + Residence_type + avg_glucose_level + bmi + smoking_status, data = brain_strokes)
+
+summary(reg1)
+```
+
+## 4.2 Logit Model
+
+When the Logit Model was estimated, the results showed that age, hypertension, average glucose level, and work type are statistically significant predictors of stroke risk, while the remaining variables do not exhibit significant effects in this specification.
+
+```{r, include = FALSE}
+reg2 = glm(stroke ~ gender + age + hypertension + heart_disease + ever_married + work_type + Residence_type + avg_glucose_level + bmi + smoking_status, family = binomial(link = "logit"), data = brain_strokes)
+
+summary(reg2)
+summary(reg2)
+tidy_reg3 <- tidy(reg2)
+
+tidy_reg3 %>%
+  kable("html", caption = "Logit Model") %>%
+  kable_styling(bootstrap_options = c("hover"), font_size = 30, full_width = TRUE) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(1, extra_css = "border-bottom: 2px solid #000;")
+
+```
+
+## 4.3 Probit Model
+
+Through both nonlinear binary response models (probit and logit), we used their values of Akaike information criterion (AIC) to choose the model that explains more information based on our data. Although the values were very similar, we opted for the Probit model, which had an AIC 5 points lower, which means that it retained less unexplained information.
+
+```{r include = FALSE}
+reg3 = glm(stroke ~ gender + age + hypertension + heart_disease + ever_married + work_type + Residence_type + avg_glucose_level + bmi + smoking_status, family = binomial(link = "probit"), data = brain_strokes)
+
+summary(reg3)
+tidy_reg3 <- tidy(reg3)
+
+tidy_reg3 %>%
+  kable("html", caption = "Probit Model") %>%
+  kable_styling(bootstrap_options = c("hover"), font_size = 30, full_width = TRUE) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(1, extra_css = "border-bottom: 2px solid #000;")
+```
+
+# 5. Model Evaluation & Statistical Tests
+
+## 5.1 Individual Significance
+
+In the Probit model results, we can see that variables such as hypertension, age, and average glucose levels have a p-value lower than 0.05, which means they are statistically significant at the 5% significance level. This suggests that in this specific model, these variables are highly associated with the probability of stroke, after controlling for remaining covariates. All the other variables should be analyzed with caution.
+
+## 5.2 Global Significance
+
+Sample information: n=4981; q = 14 After performing the global significance test, we obtained a chi-square value of 405.06, which allows us to conclude that 405.06 \> 23.69, therefore we reject H0, and we get to the conclusion that we do have statistical evidence that the model is globally significant.
+
+```{r include = FALSE}
+reg4 <- glm(stroke ~ 1, family = binomial(link = "probit"), data = brain_strokes) # this is our restricted model
+
+lrtest(reg3, reg4)
+
+```
+
+## 5.3 Average Partial Effect
+
+Hypertension increases the probability of stroke by about 1.03 percentage points, on average, ceterisparibus. The results indicate that age, hypertension, and heart disease increase the probability of stroke on average, while being married, certain work types (government, private, self-employed), and never having smoked are associated with a lower probability of stroke. Variables such as gender, residence type, BMI, average glucose level, and smoking status (smokes/unknown) show relatively small average effects on stroke probability.
+
+```{r include = FALSE}
+xb.prob <- predict(reg3)
+scale_factor <- dnorm(xb.prob)
+coef(reg3)*mean(scale_factor)
+```
+
+# 6. How good is the model?
+
+## 6.1 Classification Table
+
+As we are aware, the main objective of the probit model is for inference instead of prediction, we used the classification table as a complementary method for evaluating the model performance. The model presents an accuracy of 95%, which reflects a correct classification of most observations. Besides that, as stroke is, naturally, a low-prevalence event in the sample, we need to be cautious when interpreting this value, because it can indicate an imbalanced class instead of a high predictive model ability.
+
+```{r include = FALSE}
+classification_probit <- data.frame(response_probit = brain_strokes$stroke, predicted_probit = round(fitted(reg3),0))
+table_probit <- xtabs(~ response_probit + predicted_probit, data = classification_probit)
+
+table_probit_df <- as.data.frame(table_probit)
+kable(table_probit_df, caption = "Classification table of our final model")
+```
+
+## 6.2 Pseudo R\^2
+
+To evaluate the model’s performance, we calculated Pseudo R\^2 = 0.205. According to McFadden, having a Pseudo R\^2 within the range of 0.2 to 0.4 represents a highly satisfactory fit. Given the complexity of predicting binary stroke, this value demonstrates that the model can capture a significant portion of the underlying systematic variance.
+
+```{r include = FALSE}
+(1-(logLik(reg3)/logLik(reg4)))
+```
+
+# 7. Conclusions & Limitations
+## 7.1 Conclusions
+- Strokes are more frequent among older individuals, and their prevalence is higher for individuals with hypertension when compared to those without it. 
+
+- Three models were estimated: the Linear Probability Model (LPM), Probit, and Logit. The LPM was used as a benchmark but we discarded it due limitations. Between the nonlinear models, the Probit was selected as the preferred one based on overall performance and AIC. The global significance test confirms that the chosen model is statistically significant.
+
+- The average partial effects indicate that age, hypertension, and heart disease increase the probability of having a stroke on average, while the remaining variables are associated with lower stroke probability. Model performance was assessed through the classification table and the pseudo R² and both suggest a highly satisfactory fit.
+
+-Overall, the results are consistent with medical and economics sciences and support the relevance of key cardiovascular risk factors in explaining stroke probability.Prevention strategies should focus on early detection of individual factors that might increase the probability of a stroke, particularly among older individuals.
+
+## 7.2 Limitations
+-Stroke, in the real world is a rare event so, naturally, we will have a lower proportion of cases. 
+
+-Initially, we considered using smoking_status for visualization, however approximately 30% of the observations are classified as “Unknown”, so we decided not to compare it directly to avoid potentially biased descriptive conclusions.
+
+-Unobserved factors such as genetic predisposition or access to healthcare, may influence stroke risk but are not captured in the data. 
+
+-Relevant clinical and socioeconomic variables, such as physical activity, diet quality, or medication use, are not available in the dataset and may lead to omitted variable bias.
+
+
+# 8. References
+
+-   Dataset: <https://www.kaggle.com/datasets/jillanisofttech/brain-stroke-dataset/data>
+
+-   "Ch1: Binary Dependent Variable" Slide from Econometrics II Classes
+
+-   Information about strokes: <https://www.who.int/news-room/fact-sheets/detail/stroke>
