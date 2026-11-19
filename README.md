@@ -1,6 +1,6 @@
 # Brain Stroke Risk and Binary Response Models
 
-This project, which was developed for my Econometrics II course, presents an empirical analysis of **stroke risk using binary response models**, developed as part of the Econometrics II course. Using a real-world health dataset, we study how demographic and medical factors influence the probability of an individual experiencing a stroke.
+This project presents an empirical analysis of **stroke risk using binary response models**, developed as part of the Econometrics II course. Using a real-world health dataset, we study how demographic and medical factors influence the probability of an individual experiencing a stroke.
 
 ## Objective
 
